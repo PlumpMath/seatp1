@@ -1,0 +1,31 @@
+#include <setjmp.h>
+#include <stdio.h>
+
+static jmp_buf buf;
+static int i = 0;
+static int
+cpt()
+{
+int j = 0;
+if (setjmp(buf)) {
+	printf("j = %d\n", j );
+for (j=0; j<5; j++)
+i++,printf("i = %d\n", i );
+} else {
+	printf("j = %d\n", j );
+for (j=0; j<5; j++)
+i--,printf("i = %d\n", i );
+}
+//printf("i = %d\n", buf);
+}
+int
+main()
+{
+	int np = 0 ;
+	cpt();
+	printf("ok");
+	if (! np++)
+		longjmp(buf,~0);
+	printf("np = %d\n", np );
+	printf("i = %d\n", i );
+}
