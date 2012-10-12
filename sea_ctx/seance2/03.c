@@ -20,11 +20,13 @@ typedef void (func_t)(void*); /* a function that returns an int from an int */
 
 struct ctx_s {
  //void * stack_address;
- unsigned int ebp, esp;
+ unsigned int  ebp, esp;
  void (*f_ptr)(void*);
  void * f_args;
  int started;
 };
+
+struct ctx_s * current_ctx = NULL;
 
 int init_ctx(struct ctx_s *ctx, int stack_size, func_t f, void *args);
 void switch_to_ctx(struct ctx_s *ctx);
@@ -32,7 +34,7 @@ void switch_to_ctx(struct ctx_s *ctx);
 int init_ctx(struct ctx_s *ctx, int stack_size, func_t f, void *args)
 {
  char * addr = (char*) malloc(stack_size);
- ctx->esp = addr+stack_size-8;
+ ctx->esp = (unsigned int)(addr+stack_size-8);
  ctx->ebp = ctx->esp;
  ctx->f_ptr = f;
  ctx->f_args = args;
@@ -41,23 +43,36 @@ int init_ctx(struct ctx_s *ctx, int stack_size, func_t f, void *args)
 
 void switch_to_ctx(struct ctx_s *ctx)
 {
- if (ctx->started)
- {
-  
- } else {
+  //printf("-switch-\n") ;
   static void (*f_ptr)(void*) = NULL;
-  static int old_esp, old_ebp;
   f_ptr = ctx->f_ptr;
+  /*
+  static int old_esp, old_ebp;
+  */
   regread(esp);
-  old_esp = esp;
+  //old_esp = esp;
   regread(ebp);
-  old_ebp = ebp;
+  //old_ebp = ebp;
+  if (current_ctx) {
+    current_ctx->esp = esp;
+    current_ctx->ebp = ebp;
+  }
+  static struct ctx_s * _ctx;
+  _ctx = ctx;
+  current_ctx = ctx;
   regwrite(esp,ctx->esp);
   regwrite(ebp,ctx->ebp);
-  f_ptr(ctx->f_args);
-  regwrite(esp,old_esp);
-  regwrite(ebp,old_ebp);
- }
+  
+  if (_ctx->started)
+  {
+    return;
+  } else {
+    _ctx->started = 1;
+    f_ptr(_ctx->f_args);
+    //for(;;) ;
+    /*regwrite(esp,old_esp);
+    regwrite(ebp,old_ebp);*/
+}
 }
 
 struct ctx_s ctx_ping;
