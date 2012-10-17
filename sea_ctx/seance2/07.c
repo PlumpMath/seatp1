@@ -153,9 +153,21 @@ void start_sched()
 
 struct sem_s mutex, vide, plein;
 
-void translate_stack(struct ctx_s * ctx, unsigned char * nstack, unsigned nstack_size)
+//void translate_stack(struct ctx_s * ctx, unsigned char * nstack, unsigned nstack_size)
+void translate_stack(struct ctx_s * ctx, void * nstack, unsigned int nstack_size)
 {
-  
+  unsigned int translation = nstack - ctx->stack_addr;
+  printf("Start with ebp: %u\n",ctx->ebp);
+  printf("Will stop at %u\n", ctx->stack_addr+ctx->stack_size);
+  void * old_ebp = (void*)(*(unsigned int*)ctx->ebp);
+  while (old_ebp < ctx->stack_addr+ctx->stack_size)
+  {
+    printf("Translating %u to %u\n",old_ebp,(old_ebp+translation));
+    void * old_old_ebp = old_ebp;
+    (*(unsigned int*)old_ebp) += translation;
+    old_ebp = (*(unsigned int*)old_old_ebp);
+    printf("Next ebp: %u\n",old_ebp);
+  }
 }
 
 void yield()
@@ -167,38 +179,49 @@ void yield()
   printf("*** plein %d\n", plein.count);
   
   //if (current_ctx)
-  printf(">>> esp: %u | stack: %u\n",current_ctx->esp,current_ctx->stack_addr);
+  printf(">>> ctx->esp: %u | stack addr: %u\n",current_ctx->esp,current_ctx->stack_addr);
   
   unsigned int min_size = (current_ctx->stack_addr + current_ctx->stack_size - current_ctx->esp);
   min_size *= 2;
   if (!check_stack(current_ctx, min_size))
   {
     
-    printf(">>> REALLOCATING STACK ! <<<\n");
-    void * nstack_addr = malloc(min_size);
+    printf("\n>>> REALLOCATING STACK ! <<<\n\n");
+    void * nstack_addr = malloc(current_ctx->stack_size*2);
     printf(">>> currently using %u of %u\n",(current_ctx->stack_addr + current_ctx->stack_size - current_ctx->esp), current_ctx->stack_size);
-    printf(">>> requiring: %u\n",min_size);
-    printf(">>> obtaining: %u\n",nstack_addr);
+    printf(">>> requiring: %u\n",current_ctx->stack_size*2);
+    printf(">>> old stack: %u | new stack: %u\n",current_ctx->stack_addr,nstack_addr);
+    ///printf(">>> obtaining: %u\n",nstack_addr);
     //printf(">>> %u | %u\n",nstack_addr,min_size);
-    memcpy(nstack_addr,current_ctx->stack_addr,1);//current_ctx->stack_size);
+    memcpy(nstack_addr,current_ctx->stack_addr,current_ctx->stack_size);
     translate_stack(current_ctx, nstack_addr, min_size);
     free(current_ctx->stack_addr);
+    
+    current_ctx->ebp += nstack_addr - current_ctx->stack_addr;
+    current_ctx->esp += nstack_addr - current_ctx->stack_addr;
+    
+    current_ctx->stack_size = current_ctx->stack_size*2;
     current_ctx->stack_addr = nstack_addr;
+    exit(0);
   }
   
   
   /*
   static int old_esp, old_ebp;
   */
+  
+if (current_ctx->started)
+{
   regread(esp);
   //old_esp = esp;
   regread(ebp);
   //old_ebp = ebp;
-  printf("--> writing ctx->esp: %u\n",esp);
+  ///printf("--> current esp: %u\n",esp);
   current_ctx->esp = esp;
   current_ctx->ebp = ebp;
+}
   current_ctx = current_ctx->next;
-  printf("--> writing esp: %u\n",current_ctx->esp);
+  ///printf("--> writing esp: %u\n",current_ctx->esp);
   regwrite(esp,current_ctx->esp);
   regwrite(ebp,current_ctx->ebp);
   disp_procs();
@@ -238,16 +261,26 @@ int main(int argc, char *argv[])
   exit(EXIT_SUCCESS);
 }
 
+void recurse(int n)
+{
+  //if (!(n%10)) printf("n: %d\n",n);
+  if (!(n%50)) printf("n: %d\n",n);
+  if (n) recurse(n-1);
+}
 
 void producteur (void)
 {
   while (1) {
-    printf("produire_objet(&objet);\n"); /* produire l'objet suivant */
+    printf("PRODUIRE\n"); /* produire l'objet suivant */
     sem_down(&vide); /* dec. nb places libres */
     sem_down(&mutex); /* entree en section critique */
-    printf("mettre_objet(objet);\n"); /* mettre l'objet dans le tampon */
+    printf("METTRE\n"); /* mettre l'objet dans le tampon */
     sem_up(&mutex); /* sortie de section critique */
     sem_up(&plein); /* inc. nb place occupees */
+    int i = 0;
+    //for(i=0; i<5000;i++) printf("%d;",i);
+    //for(i=0; i<500;i++) printf("%d;",i);
+    recurse(200);
   }
 }
 
@@ -256,10 +289,10 @@ void consommateur (void)
   while (1) {
     sem_down(&plein); /* dec. nb emplacements occupes */
     sem_down(&mutex); /* entree section critique */
-    printf("retirer_objet (&objet);\n"); /* retire un objet du tampon */
+    printf("RETIRER\n"); /* retire un objet du tampon */
     sem_up(&mutex); /* sortie de la section critique */
     sem_up(&vide); /* inc. nb emplacements libres */
-    printf("utiliser_objet(objet);\n"); /* utiliser l'objet */
+    printf("UTILISER\n"); /* utiliser l'objet */
   }
 }
 
